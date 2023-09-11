@@ -1,0 +1,4 @@
+**/*.zip
+
+lambda/upload.sh
+lambda/zip.sh
