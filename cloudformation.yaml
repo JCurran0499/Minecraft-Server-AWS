@@ -55,7 +55,6 @@ Parameters:
 
 Conditions:
   HasCustomDomain: !Not [!Equals [!Ref DomainName, curranserver.click]]
-  HasSubdomain: !Not [!Equals [!Ref CustomSubdomain, ""]]
 
 
 Resources:
@@ -547,6 +546,31 @@ Resources:
         - - integrations
           - !Ref StopAPIIntegration
 
+  APIDomainName:
+    Type: AWS::ApiGatewayV2::DomainName
+    DependsOn: 
+      - APIHTTPSCertificate
+      - APILambdaTrigger
+    Properties:
+      DomainName: !Join
+        - "."
+        - - api
+          - !Ref CustomSubdomain
+          - !Ref DomainName
+      DomainNameConfigurations:
+        - CertificateArn: !Ref APIHTTPSCertificate
+          CertificateName: APICertificate
+
+  APIDomainNameMapping:
+    Type: AWS::ApiGatewayV2::ApiMapping
+    DependsOn: 
+      - APIDomainName
+      - APILambdaTriggerStage
+    Properties:
+      ApiId: !Ref APILambdaTrigger
+      DomainName: !Ref APIDomainName
+      Stage: !Ref APILambdaTriggerStage
+
 
   # Route 53
   ServerHostedZone:
@@ -574,3 +598,46 @@ Resources:
         - !GetAtt ServerHostInstance.PublicIp
       Type: A
       TTL: 300
+
+  APIRouteRecord:
+    Type: AWS::Route53::RecordSet
+    DependsOn: APIDomainName
+    Properties:
+      AliasTarget:
+        DNSName: !GetAtt APIDomainName.RegionalDomainName
+        HostedZoneId: !GetAtt APIDomainName.RegionalHostedZoneId
+      HostedZoneId: !If
+        - HasCustomDomain
+        - !Ref ServerHostedZone
+        - !FindInMap [Route53, HostedZone, DefaultZone]
+      Name: !Join
+        - "."
+        - - api
+          - !Ref CustomSubdomain
+          - !Ref DomainName
+      Type: A
+
+
+  # ACM
+  APIHTTPSCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Join
+        - "."
+        - - api
+          - !Ref CustomSubdomain
+          - !Ref DomainName
+      DomainValidationOptions:
+        - DomainName: !Join
+            - "."
+            - - api
+              - !Ref CustomSubdomain
+              - !Ref DomainName
+          HostedZoneId: !If
+            - HasCustomDomain
+            - !Ref ServerHostedZone
+            - !FindInMap [Route53, HostedZone, DefaultZone]
+      Tags:
+        - Key: created_by
+          Value: jack_curran
+      ValidationMethod: DNS
