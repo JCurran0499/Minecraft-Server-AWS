@@ -17,9 +17,8 @@ def lambda_handler(event, context):
     )
     
     msg = 'Minecraft server is starting up, and in a few moments it will be ' + \
-            'accessible at ' + + domain + '. ' + \
+            'accessible at ' + domain + '. ' + \
             '\nFor now, check the /status endpoint to track whether the server is up and running.'
-    msg
     return {
         'statusCode': 200,
         'body': msg
