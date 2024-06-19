@@ -1,26 +1,15 @@
-AWSTemplateFormatVersion : "2010-09-09"
-Description: This is a CloudFormation template for creating a Minecraft server hosted on AWS
+Transform: AWS::Serverless-2016-10-31
+Description: AWS Resources for the Minecraft server
 
 Mappings:
-  EC2:
-    Instance:
-      Name: Minecraft Server (cloudformation)
-      Type: t2.medium
-    SecurityGroup:
-      Name: Minecraft Server SG (cloudformation)
-    KeyPair:
-      Name: Minecraft-Keys-cloudformation
-  
-  Lambda:
-    Function:
-      StartName: Minecraft-Start-cloudformation
-      StatusName: Minecraft-Status-cloudformation
-      StopName: Minecraft-Stop-cloudformation
-      DNSName: Minecraft-DNS-cloudformation
-
-  ApiGateway:
-    API:
-      Name: Minecraft-Server-API-cloudformation
+  # EC2:
+  #   Instance:
+  #     Name: Minecraft Server (cloudformation)
+  #     Type: t2.medium
+  #   SecurityGroup:
+  #     Name: Minecraft Server SG (cloudformation)
+  #   KeyPair:
+  #     Name: Minecraft-Keys-cloudformation
 
   Route53:
     HostedZone:
@@ -28,38 +17,50 @@ Mappings:
 
 
 Parameters:
+  Owner:
+    Type: String
+    Default: jack
+
+  Project:
+    Type: String
+    Default: Minecraft
+
+  AppName:
+    Type: String
+    Default: Minecraft
+  
   DomainName:
     Type: String
     Default: curranserver.click
     AllowedPattern: ^(NA)$|^(\w+\.\w+)$
     Description: The domain name imported by the user
 
-  CustomSubdomain:
-    Type: String
-    Default: cloud
-    AllowedPattern: ^()$|^((\w+\.)*\w+)$
-    Description: A subdomain to be added to the TLD
+  # CustomSubdomain:
+  #   Type: String
+  #   Default: cloud
+  #   AllowedPattern: ^()$|^((\w+\.)*\w+)$
+  #   Description: A subdomain to be added to the TLD
 
-  AvailabilityZone:
-    Type: String
-    Default: us-east-1a
-    AllowedPattern: ^[a-z]+-[a-z]+-[a-z0-9]+$
-    Description: The availability zone for hosting the server
+  # AvailabilityZone:
+  #   Type: String
+  #   Default: us-east-1a
+  #   AllowedPattern: ^[a-z]+-[a-z]+-[a-z0-9]+$
+  #   Description: The availability zone for hosting the server
 
-  ServerInstanceType:
-    Type: String
-    Default: t2.medium
-    AllowedPattern: ^\w+\.\w+$
-    Description: The EC2 instance type for hosting the server
+  # ServerInstanceType:
+  #   Type: String
+  #   Default: t2.medium
+  #   AllowedPattern: ^\w+\.\w+$
+  #   Description: The EC2 instance type for hosting the server
 
 
-Conditions:
-  HasCustomDomain: !Not [!Equals [!Ref DomainName, curranserver.click]]
+# Conditions:
+#   HasCustomDomain: !Not [!Equals [!Ref DomainName, curranserver.click]]
 
 
 Resources:
   # IAM
-  LambdaStartExecutionRole:
+  LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -71,401 +72,246 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonEC2FullAccess
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaRole
-      RoleName: LambdaRole-minecraft-start-cloudformation
-      Tags:
-        - Key: created_by
-          Value: jack_curran
-
-  LambdaStatusExecutionRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess
         - arn:aws:iam::aws:policy/AmazonSNSFullAccess
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaRole
-      RoleName: LambdaRole-minecraft-status-cloudformation
-      Tags:
-        - Key: created_by
-          Value: jack_curran
-
-  LambdaStopExecutionRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AmazonEC2FullAccess
-      RoleName: LambdaRole-minecraft-stop-cloudformation
-      Tags:
-        - Key: created_by
-          Value: jack_curran
-
-  LambdaDNSExecutionRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess
         - arn:aws:iam::aws:policy/AmazonRoute53FullAccess
-      RoleName: LambdaRole-minecraft-dns-cloudformation
+        - arn:aws:iam::aws:policy/CloudWatchLogsFullAccess
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaRole
+      RoleName: !Sub Lambda-${AppName}
       Tags:
-        - Key: created_by
-          Value: jack_curran
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
 
-  ServerHostIAMRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: ec2.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/IAMReadOnlyAccess
-        - arn:aws:iam::aws:policy/AmazonS3FullAccess
-      RoleName: EC2Role-minecraft-cloudformation
-      Tags:
-        - Key: created_by
-          Value: jack_curran
+  # ServerHostIAMRole:
+  #   Type: AWS::IAM::Role
+  #   Properties:
+  #     AssumeRolePolicyDocument:
+  #       Version: "2012-10-17"
+  #       Statement:
+  #         - Effect: Allow
+  #           Principal:
+  #             Service: ec2.amazonaws.com
+  #           Action: sts:AssumeRole
+  #     ManagedPolicyArns:
+  #       - arn:aws:iam::aws:policy/IAMReadOnlyAccess
+  #       - arn:aws:iam::aws:policy/AmazonS3FullAccess
+  #     RoleName: EC2Role-minecraft-cloudformation
+  #     Tags:
+  #       - Key: created_by
+  #         Value: jack_curran
 
-  ServerHostInstanceProfile:
-    Type: AWS::IAM::InstanceProfile
-    DependsOn: ServerHostIAMRole
-    Properties:
-      InstanceProfileName: EC2Role-minecraft-cloudformation
-      Roles:
-        - !Ref ServerHostIAMRole
+  # ServerHostInstanceProfile:
+  #   Type: AWS::IAM::InstanceProfile
+  #   DependsOn: ServerHostIAMRole
+  #   Properties:
+  #     InstanceProfileName: EC2Role-minecraft-cloudformation
+  #     Roles:
+  #       - !Ref ServerHostIAMRole
 
   # EC2
-  ServerHostEBSVolume:
-    Type: AWS::EC2::Volume
-    Properties:
-      AvailabilityZone: !Ref AvailabilityZone
-      Iops: 3000
-      Size: 16
-      Tags:
-        - Key: created_by
-          Value: jack_curran
-      Throughput: 125
-      VolumeType: gp3
+  # ServerHostEBSVolume:
+  #   Type: AWS::EC2::Volume
+  #   Properties:
+  #     AvailabilityZone: !Ref AvailabilityZone
+  #     Iops: 3000
+  #     Size: 16
+  #     Tags:
+  #       - Key: created_by
+  #         Value: jack_curran
+  #     Throughput: 125
+  #     VolumeType: gp3
 
-  ServerHostSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: This security group allows access to the server only through the Minecraft portal.
-      GroupName: !FindInMap [EC2, SecurityGroup, Name]
-      SecurityGroupEgress:
-        - CidrIp: 0.0.0.0/0
-          Description: Allows access everywhere with no limitations
-          FromPort: -1
-          ToPort: -1
-          IpProtocol: all
-      SecurityGroupIngress:
-        - CidrIp: 0.0.0.0/0
-          Description: Allows SSH access
-          FromPort: 22
-          ToPort: 22
-          IpProtocol: tcp
-        - CidrIp: 0.0.0.0/0
-          Description: Allows access from the Minecraft launcher
-          FromPort: 25565
-          ToPort: 25565
-          IpProtocol: tcp
-      Tags:
-        - Key: Name
-          Value: !FindInMap [EC2, SecurityGroup, Name]
-        - Key: created_by
-          Value: jack_curran
-      VpcId: vpc-04235c526004ddbb5
+  # ServerHostSecurityGroup:
+  #   Type: AWS::EC2::SecurityGroup
+  #   Properties:
+  #     GroupDescription: This security group allows access to the server only through the Minecraft portal.
+  #     GroupName: !FindInMap [EC2, SecurityGroup, Name]
+  #     SecurityGroupEgress:
+  #       - CidrIp: 0.0.0.0/0
+  #         Description: Allows access everywhere with no limitations
+  #         FromPort: -1
+  #         ToPort: -1
+  #         IpProtocol: all
+  #     SecurityGroupIngress:
+  #       - CidrIp: 0.0.0.0/0
+  #         Description: Allows SSH access
+  #         FromPort: 22
+  #         ToPort: 22
+  #         IpProtocol: tcp
+  #       - CidrIp: 0.0.0.0/0
+  #         Description: Allows access from the Minecraft launcher
+  #         FromPort: 25565
+  #         ToPort: 25565
+  #         IpProtocol: tcp
+  #     Tags:
+  #       - Key: Name
+  #         Value: !FindInMap [EC2, SecurityGroup, Name]
+  #       - Key: created_by
+  #         Value: jack_curran
+  #     VpcId: vpc-04235c526004ddbb5
 
-  ServerHostKeyPair:
-    Type: AWS::EC2::KeyPair
-    Properties:
-      KeyName: !FindInMap [EC2, KeyPair, Name]
-      Tags:
-        - Key: Name
-          Value: !FindInMap [EC2, KeyPair, Name]
-        - Key: created_by
-          Value: jack_curran
+  # ServerHostKeyPair:
+  #   Type: AWS::EC2::KeyPair
+  #   Properties:
+  #     KeyName: !FindInMap [EC2, KeyPair, Name]
+  #     Tags:
+  #       - Key: Name
+  #         Value: !FindInMap [EC2, KeyPair, Name]
+  #       - Key: created_by
+  #         Value: jack_curran
 
-  ServerHostInstance:
-    Type: AWS::EC2::Instance
-    DependsOn: 
-      - ServerHostInstanceProfile
-      - ServerHostEBSVolume
-      - ServerHostSecurityGroup
-      - ServerHostKeyPair
-    Properties:
-      AvailabilityZone: !Ref AvailabilityZone
-      IamInstanceProfile: !Ref ServerHostInstanceProfile
-      ImageId: ami-0889a44b331db0194
-      InstanceType: !Ref ServerInstanceType
-      KeyName: !FindInMap [EC2, KeyPair, Name]
-      PropagateTagsToVolumeOnCreation: true
-      SecurityGroupIds:
-        - !GetAtt ServerHostSecurityGroup.GroupId
-      Tags:
-        - Key: Name
-          Value: !FindInMap [EC2, Instance, Name]
-        - Key: created_by
-          Value: jack_curran
-      UserData: !Base64 |
-        #!/bin/bash
+  # ServerHostInstance:
+  #   Type: AWS::EC2::Instance
+  #   DependsOn: 
+  #     - ServerHostInstanceProfile
+  #     - ServerHostEBSVolume
+  #     - ServerHostSecurityGroup
+  #     - ServerHostKeyPair
+  #   Properties:
+  #     AvailabilityZone: !Ref AvailabilityZone
+  #     IamInstanceProfile: !Ref ServerHostInstanceProfile
+  #     ImageId: ami-0889a44b331db0194
+  #     InstanceType: !Ref ServerInstanceType
+  #     KeyName: !FindInMap [EC2, KeyPair, Name]
+  #     PropagateTagsToVolumeOnCreation: true
+  #     SecurityGroupIds:
+  #       - !GetAtt ServerHostSecurityGroup.GroupId
+  #     Tags:
+  #       - Key: Name
+  #         Value: !FindInMap [EC2, Instance, Name]
+  #       - Key: created_by
+  #         Value: jack_curran
+  #     UserData: !Base64 |
+  #       #!/bin/bash
         
-        set +e
+  #       set +e
 
-        sudo yum update -y
-        sudo yum install -y java-17-amazon-corretto-devel.x86_64
-        sudo mkdir /opt/minecraft
-        sudo mkdir /opt/minecraft/server
-        cd /opt/minecraft/server
-        sudo aws s3 cp s3://minecraft-resources-curran/server.jar server.jar
-        sudo java -Xmx1024M -Xms1024M -jar server.jar nogui
-        sudo aws s3 cp s3://minecraft-resources-curran/eula.txt eula.txt
+  #       sudo yum update -y
+  #       sudo yum install -y java-17-amazon-corretto-devel.x86_64
+  #       sudo mkdir /opt/minecraft
+  #       sudo mkdir /opt/minecraft/server
+  #       cd /opt/minecraft/server
+  #       sudo aws s3 cp s3://minecraft-resources-curran/server.jar server.jar
+  #       sudo java -Xmx1024M -Xms1024M -jar server.jar nogui
+  #       sudo aws s3 cp s3://minecraft-resources-curran/eula.txt eula.txt
 
-        cd ~
-        sudo aws s3 cp s3://minecraft-resources-curran/rc.local /etc/rc.local
-        sudo aws s3 cp s3://minecraft-resources-curran/rc.local /etc/rc.d/rc.local
-        sudo chmod u+x /etc/rc.local
-        sudo chmod u+x /etc/rc.d/rc.local
-        sudo aws s3 cp s3://minecraft-resources-curran/rc-local.service /etc/systemd/system/rc-local.service
+  #       cd ~
+  #       sudo aws s3 cp s3://minecraft-resources-curran/rc.local /etc/rc.local
+  #       sudo aws s3 cp s3://minecraft-resources-curran/rc.local /etc/rc.d/rc.local
+  #       sudo chmod u+x /etc/rc.local
+  #       sudo chmod u+x /etc/rc.d/rc.local
+  #       sudo aws s3 cp s3://minecraft-resources-curran/rc-local.service /etc/systemd/system/rc-local.service
         
-        sudo systemctl start rc-local
-        sudo systemctl enable rc-local
+  #       sudo systemctl start rc-local
+  #       sudo systemctl enable rc-local
 
-      Volumes:
-        - Device: /dev/sdh
-          VolumeId: !GetAtt ServerHostEBSVolume.VolumeId
+  #     Volumes:
+  #       - Device: /dev/sdh
+  #         VolumeId: !GetAtt ServerHostEBSVolume.VolumeId
 
   # Lambda
-  StartLambda:
-    Type: AWS::Lambda::Function
-    DependsOn:
-      - ServerHostInstance
-      - LambdaStartExecutionRole
+  DependencyLayer:
+    Type: AWS::Serverless::LayerVersion
     Properties:
-      Description: This Lambda function is used to start the Minecraft server.
-      Code:
-        S3Bucket: minecraft-resources-curran
-        S3Key: lambda/start/lambda_function.zip
-      Environment:
-        Variables:
-          INSTANCE_ID: !Ref ServerHostInstance
-          DOMAIN: !Join
-            - "."
-            - - !Ref CustomSubdomain
-              - !Ref DomainName
-          DNS_FUNCTION: !FindInMap [Lambda, Function, DNSName]
-      FunctionName: !FindInMap [Lambda, Function, StartName]
-      Handler: lambda_function.lambda_handler
-      PackageType: Zip
-      Role: !GetAtt LambdaStartExecutionRole.Arn
-      Runtime: python3.9
-      Tags:
-        - Key: server_action
-          Value: start
-        - Key: created_by
-          Value: jack_curran
-      Timeout: 5
+      CompatibleArchitectures:
+        - arm64
+        - x86_64
+      CompatibleRuntimes:
+        - python3.12
+      ContentUri: ./layer
+      LayerName: !Sub ${AppName}-dependencies
+      RetentionPolicy: Delete
 
-  StatusLambda:
-    Type: AWS::Lambda::Function
-    DependsOn: 
-      - ServerHostInstance
-      - LambdaStatusExecutionRole
+  MinecraftLambda:
+    Type: AWS::Serverless::Function
     Properties:
-      Description: This Lambda function is used to get the status of the Minecraft server.
-      Code:
-        S3Bucket: minecraft-resources-curran
-        S3Key: lambda/status/lambda_function.zip
+      Architectures:
+        - arm64
+      CodeUri: ./main
+      Description: Manages the Minecraft server
       Environment:
         Variables:
-          INSTANCE_ID: !Ref ServerHostInstance
-          STOP_FUNCTION: !FindInMap [Lambda, Function, StopName]
+          INSTANCE_ID: i-0f46f418e6cd5bd50
+          DOMAIN: !Ref DomainName
           PERIOD: 4
-      FunctionName: !FindInMap [Lambda, Function, StatusName]
-      Handler: lambda_function.lambda_handler
-      PackageType: Zip
-      Role: !GetAtt LambdaStatusExecutionRole.Arn
-      Runtime: python3.9
+          DNS_FUNCTION: !Ref DNSLambda
+          SNS_TOPIC: arn:aws:sns:us-east-1:298451523862:Minecraft-Server-SNS
+          POWERTOOLS_SERVICE_NAME: !Ref AppName
+          POWERTOOLS_LOG_LEVEL: INFO
+      FunctionName: !Ref AppName
+      Handler: app.handler
+      Events:
+        ApiEvent:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref MinecraftAPI
+            Method: ANY
+            Path: /{path+}
+            PayloadFormatVersion: "2.0"
+      Layers:
+        - !Ref DependencyLayer
+      MemorySize: 128
+      Runtime: python3.12
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
       Tags:
-        - Key: server_action
-          Value: status
-        - Key: created_by
-          Value: jack_curran
-      Timeout: 5
-
-  StopLambda:
-    Type: AWS::Lambda::Function
-    DependsOn:
-      - ServerHostInstance
-      - LambdaStopExecutionRole
-    Properties:
-      Description: This Lambda function is used to stop the Minecraft server.
-      Code:
-        S3Bucket: minecraft-resources-curran
-        S3Key: lambda/stop/lambda_function.zip
-      Environment:
-        Variables:
-          INSTANCE_ID: !Ref ServerHostInstance
-      FunctionName: !FindInMap [Lambda, Function, StopName]
-      Handler: lambda_function.lambda_handler
-      PackageType: Zip
-      Role: !GetAtt LambdaStopExecutionRole.Arn
-      Runtime: python3.9
-      Tags:
-        - Key: server_action
-          Value: stop
-        - Key: created_by
-          Value: jack_curran
-      Timeout: 5
+        Owner: !Ref Owner
+        Project: !Ref Project
 
   DNSLambda:
-    Type: AWS::Lambda::Function
-    DependsOn:
-      - ServerHostInstance
-      - LambdaDNSExecutionRole
+    Type: AWS::Serverless::Function
     Properties:
-      Description: |
-        This Lambda function is used to update the IP 
-        address on the Route53 record pointing to the server. 
-        This is done so the DNS name still redirects to the 
-        server even when the IP address has changed.
-      Code: 
-        S3Bucket: minecraft-resources-curran
-        S3Key: lambda/dns/lambda_function.zip
+      Architectures:
+        - arm64
+      CodeUri: ./dns
+      Description: Updates the Route53 record when server starts
       Environment:
         Variables:
-          INSTANCE_ID: !Ref ServerHostInstance
-          DOMAIN: !Join
-            - "."
-            - - !Ref CustomSubdomain
-              - !Ref DomainName
-          HOSTED_ZONE_ID: !If 
-            - HasCustomDomain
-            - !Ref ServerHostedZone
-            - !FindInMap [Route53, HostedZone, DefaultZone]
-      FunctionName: !FindInMap [Lambda, Function, DNSName]
-      Handler: lambda_function.lambda_handler
-      PackageType: Zip
-      Role: !GetAtt LambdaDNSExecutionRole.Arn
-      Runtime: python3.9
-      Tags:
-        - Key: server_action
-          Value: update_dns
-        - Key: created_by
-          Value: jack_curran
+          INSTANCE_ID: i-0f46f418e6cd5bd50
+          DOMAIN: !Ref DomainName
+          HOSTED_ZONE_ID: !FindInMap [Route53, HostedZone, DefaultZone]
+          POWERTOOLS_SERVICE_NAME: !Sub ${AppName}-DNS-Manager
+          POWERTOOLS_LOG_LEVEL: INFO
+      FunctionName: !Sub ${AppName}-DNS-Manager
+      Handler: app.handler
+      Layers:
+        - !Ref DependencyLayer
+      MemorySize: 128
+      Runtime: python3.12
+      Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 300
-
-  StartLambdaPermission:
-    Type: AWS::Lambda::Permission
-    DependsOn: StartLambda
-    Properties:
-      Action: lambda:InvokeFunction
-      FunctionName: !FindInMap [Lambda, Function, StartName]
-      Principal: apigateway.amazonaws.com
-      SourceAccount: !Ref AWS::AccountId
-      SourceArn: !Join
-        - ""
-        - - "arn:"
-          - !Ref AWS::Partition
-          - ":execute-api:"
-          - !Ref AWS::Region
-          - ":"
-          - !Ref AWS::AccountId
-          - ":"
-          - !Ref APILambdaTrigger
-          - "/*/*/start"
-
-  StatusLambdaPermission:
-    Type: AWS::Lambda::Permission
-    DependsOn: StatusLambda
-    Properties:
-      Action: lambda:InvokeFunction
-      FunctionName: !FindInMap [Lambda, Function, StatusName]
-      Principal: apigateway.amazonaws.com
-      SourceAccount: !Ref AWS::AccountId
-      SourceArn: !Join
-        - ""
-        - - "arn:"
-          - !Ref AWS::Partition
-          - ":execute-api:"
-          - !Ref AWS::Region
-          - ":"
-          - !Ref AWS::AccountId
-          - ":"
-          - !Ref APILambdaTrigger
-          - "/*/*/status"
-
-  StopLambdaPermission:
-    Type: AWS::Lambda::Permission
-    DependsOn: StopLambda
-    Properties:
-      Action: lambda:InvokeFunction
-      FunctionName: !FindInMap [Lambda, Function, StopName]
-      Principal: apigateway.amazonaws.com
-      SourceAccount: !Ref AWS::AccountId
-      SourceArn: !Join
-        - ""
-        - - "arn:"
-          - !Ref AWS::Partition
-          - ":execute-api:"
-          - !Ref AWS::Region
-          - ":"
-          - !Ref AWS::AccountId
-          - ":"
-          - !Ref APILambdaTrigger
-          - "/*/*/stop"
-
+      Tags:
+        Owner: !Ref Owner
+        Project: !Ref Project
 
   # API Gateway
-  APILambdaTrigger:
+  MinecraftAPI:
     Type: AWS::ApiGatewayV2::Api
-    DependsOn:
-      - StartLambda
-      - StatusLambda
-      - StopLambda
     Properties:
-      Description: This API will be used to trigger the Lambdas that manage the server
-      Name: !FindInMap [ApiGateway, API, Name]
+      Description: Triggers the Lambda that manages the Minecraft server
+      Name: !Sub ${AppName}-API
       ProtocolType: HTTP
+      Tags:
+        Owner: !Ref Owner
+        Project: !Ref Project
 
-  APILambdaTriggerStage:
+  MinecraftAPIStage:
     Type: AWS::ApiGatewayV2::Stage
-    DependsOn: APILambdaTrigger
     Properties:
-      ApiId: !Ref APILambdaTrigger
+      ApiId: !Ref MinecraftAPI
       AutoDeploy: true
       StageName: $default
+      Tags:
+        Owner: !Ref Owner
+        Project: !Ref Project
 
-  StartAPIIntegration:
+  MinecraftAPIIntegration:
     Type: AWS::ApiGatewayV2::Integration
-    DependsOn: APILambdaTrigger
     Properties:
-      ApiId: !Ref APILambdaTrigger
+      ApiId: !Ref MinecraftAPI
+      Description: Integrating the Minecraft API with the managing lambda
       IntegrationType: AWS_PROXY
-      IntegrationMethod: POST
       IntegrationUri: !Join
         - ""
         - - "arn:"
@@ -473,171 +319,113 @@ Resources:
           - ":apigateway:"
           - !Ref AWS::Region
           - ":lambda:path/2015-03-31/functions/"
-          - !GetAtt StartLambda.Arn
+          - !GetAtt MinecraftLambda.Arn
           - /invocations
       PayloadFormatVersion: "2.0"
 
-  StatusAPIIntegration:
-    Type: AWS::ApiGatewayV2::Integration
-    DependsOn: APILambdaTrigger
-    Properties:
-      ApiId: !Ref APILambdaTrigger
-      IntegrationType: AWS_PROXY
-      IntegrationMethod: POST
-      IntegrationUri: !Join
-        - ""
-        - - "arn:"
-          - !Ref AWS::Partition
-          - ":apigateway:"
-          - !Ref AWS::Region
-          - ":lambda:path/2015-03-31/functions/"
-          - !GetAtt StatusLambda.Arn
-          - /invocations
-      PayloadFormatVersion: "2.0"
-
-  StopAPIIntegration:
-    Type: AWS::ApiGatewayV2::Integration
-    DependsOn: APILambdaTrigger
-    Properties:
-      ApiId: !Ref APILambdaTrigger
-      IntegrationType: AWS_PROXY
-      IntegrationMethod: POST
-      IntegrationUri: !Join
-        - ""
-        - - "arn:"
-          - !Ref AWS::Partition
-          - ":apigateway:"
-          - !Ref AWS::Region
-          - ":lambda:path/2015-03-31/functions/"
-          - !GetAtt StopLambda.Arn
-          - /invocations
-      PayloadFormatVersion: "2.0"
-
-  StartAPIRoute:
+  MinecraftAPIRoute:
     Type: AWS::ApiGatewayV2::Route
-    DependsOn: StartAPIIntegration
     Properties:
-      ApiId: !Ref APILambdaTrigger
-      RouteKey: GET /start
+      ApiId: !Ref MinecraftAPI
+      AuthorizationType: NONE
+      RouteKey: ANY /{path+}
       Target: !Join
         - /
         - - integrations
-          - !Ref StartAPIIntegration
+          - !Ref MinecraftAPIIntegration
 
-  StatusAPIRoute:
-    Type: AWS::ApiGatewayV2::Route
-    DependsOn: StatusAPIIntegration
-    Properties:
-      ApiId: !Ref APILambdaTrigger
-      RouteKey: GET /status
-      Target: !Join
-        - /
-        - - integrations
-          - !Ref StatusAPIIntegration
+  # APIDomainName:
+  #   Type: AWS::ApiGatewayV2::DomainName
+  #   DependsOn: 
+  #     - APIHTTPSCertificate
+  #     - APILambdaTrigger
+  #   Properties:
+  #     DomainName: !Join
+  #       - "."
+  #       - - api
+  #         - !Ref CustomSubdomain
+  #         - !Ref DomainName
+  #     DomainNameConfigurations:
+  #       - CertificateArn: !Ref APIHTTPSCertificate
+  #         CertificateName: APICertificate
 
-  StopAPIRoute:
-    Type: AWS::ApiGatewayV2::Route
-    DependsOn: StopAPIIntegration
-    Properties:
-      ApiId: !Ref APILambdaTrigger
-      RouteKey: GET /stop
-      Target: !Join
-        - /
-        - - integrations
-          - !Ref StopAPIIntegration
-
-  APIDomainName:
-    Type: AWS::ApiGatewayV2::DomainName
-    DependsOn: 
-      - APIHTTPSCertificate
-      - APILambdaTrigger
-    Properties:
-      DomainName: !Join
-        - "."
-        - - api
-          - !Ref CustomSubdomain
-          - !Ref DomainName
-      DomainNameConfigurations:
-        - CertificateArn: !Ref APIHTTPSCertificate
-          CertificateName: APICertificate
-
-  APIDomainNameMapping:
-    Type: AWS::ApiGatewayV2::ApiMapping
-    DependsOn: 
-      - APIDomainName
-      - APILambdaTriggerStage
-    Properties:
-      ApiId: !Ref APILambdaTrigger
-      DomainName: !Ref APIDomainName
-      Stage: !Ref APILambdaTriggerStage
+  # APIDomainNameMapping:
+  #   Type: AWS::ApiGatewayV2::ApiMapping
+  #   DependsOn: 
+  #     - APIDomainName
+  #     - APILambdaTriggerStage
+  #   Properties:
+  #     ApiId: !Ref APILambdaTrigger
+  #     DomainName: !Ref APIDomainName
+  #     Stage: !Ref APILambdaTriggerStage
 
 
   # Route 53
-  ServerHostedZone:
-    Type: AWS::Route53::HostedZone
-    Condition: HasCustomDomain
-    Properties:
-      Name: !Ref DomainName
-      HostedZoneTags:
-        - Key: created_by
-          Value: jack_curran
+  # ServerHostedZone:
+  #   Type: AWS::Route53::HostedZone
+  #   Condition: HasCustomDomain
+  #   Properties:
+  #     Name: !Ref DomainName
+  #     HostedZoneTags:
+  #       - Key: created_by
+  #         Value: jack_curran
 
-  ServerRouteRecord:
-    Type: AWS::Route53::RecordSet
-    DependsOn: ServerHostInstance
-    Properties:
-      HostedZoneId: !If
-        - HasCustomDomain
-        - !Ref ServerHostedZone
-        - !FindInMap [Route53, HostedZone, DefaultZone]
-      Name: !Join
-        - "."
-        - - !Ref CustomSubdomain
-          - !Ref DomainName
-      ResourceRecords:
-        - !GetAtt ServerHostInstance.PublicIp
-      Type: A
-      TTL: 300
+  # ServerRouteRecord:
+  #   Type: AWS::Route53::RecordSet
+  #   DependsOn: ServerHostInstance
+  #   Properties:
+  #     HostedZoneId: !If
+  #       - HasCustomDomain
+  #       - !Ref ServerHostedZone
+  #       - !FindInMap [Route53, HostedZone, DefaultZone]
+  #     Name: !Join
+  #       - "."
+  #       - - !Ref CustomSubdomain
+  #         - !Ref DomainName
+  #     ResourceRecords:
+  #       - !GetAtt ServerHostInstance.PublicIp
+  #     Type: A
+  #     TTL: 300
 
-  APIRouteRecord:
-    Type: AWS::Route53::RecordSet
-    DependsOn: APIDomainName
-    Properties:
-      AliasTarget:
-        DNSName: !GetAtt APIDomainName.RegionalDomainName
-        HostedZoneId: !GetAtt APIDomainName.RegionalHostedZoneId
-      HostedZoneId: !If
-        - HasCustomDomain
-        - !Ref ServerHostedZone
-        - !FindInMap [Route53, HostedZone, DefaultZone]
-      Name: !Join
-        - "."
-        - - api
-          - !Ref CustomSubdomain
-          - !Ref DomainName
-      Type: A
+  # APIRouteRecord:
+  #   Type: AWS::Route53::RecordSet
+  #   DependsOn: APIDomainName
+  #   Properties:
+  #     AliasTarget:
+  #       DNSName: !GetAtt APIDomainName.RegionalDomainName
+  #       HostedZoneId: !GetAtt APIDomainName.RegionalHostedZoneId
+  #     HostedZoneId: !If
+  #       - HasCustomDomain
+  #       - !Ref ServerHostedZone
+  #       - !FindInMap [Route53, HostedZone, DefaultZone]
+  #     Name: !Join
+  #       - "."
+  #       - - api
+  #         - !Ref CustomSubdomain
+  #         - !Ref DomainName
+  #     Type: A
 
 
-  # ACM
-  APIHTTPSCertificate:
-    Type: AWS::CertificateManager::Certificate
-    Properties:
-      DomainName: !Join
-        - "."
-        - - api
-          - !Ref CustomSubdomain
-          - !Ref DomainName
-      DomainValidationOptions:
-        - DomainName: !Join
-            - "."
-            - - api
-              - !Ref CustomSubdomain
-              - !Ref DomainName
-          HostedZoneId: !If
-            - HasCustomDomain
-            - !Ref ServerHostedZone
-            - !FindInMap [Route53, HostedZone, DefaultZone]
-      Tags:
-        - Key: created_by
-          Value: jack_curran
-      ValidationMethod: DNS
+  # # ACM
+  # APIHTTPSCertificate:
+    # Type: AWS::CertificateManager::Certificate
+    # Properties:
+    #   DomainName: !Join
+    #     - "."
+    #     - - api
+    #       - !Ref CustomSubdomain
+    #       - !Ref DomainName
+    #   DomainValidationOptions:
+    #     - DomainName: !Join
+    #         - "."
+    #         - - api
+    #           - !Ref CustomSubdomain
+    #           - !Ref DomainName
+    #       HostedZoneId: !If
+    #         - HasCustomDomain
+    #         - !Ref ServerHostedZone
+    #         - !FindInMap [Route53, HostedZone, DefaultZone]
+    #   Tags:
+    #     - Key: created_by
+    #       Value: jack_curran
+    #   ValidationMethod: DNS
