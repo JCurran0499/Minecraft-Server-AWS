@@ -10,6 +10,7 @@ fi
 
 read -r S3_BUCKET < s3_bucket.txt
 
+aws s3 sync server s3://minecraft-world-curran
 aws s3 sync scripts s3://minecraft-world-curran/scripts --delete
 
 sam build -t cloudformation.yaml

@@ -11,6 +11,7 @@ Mappings:
       Runtime: python3.12
       Architecture: arm64
       LogLevel: INFO
+      ServerPeriod: 4
 
 Parameters:
   Owner:
@@ -168,13 +169,6 @@ Resources:
       InstanceType: !FindInMap [Global, EC2, InstanceType]
       SecurityGroupIds:
         - !GetAtt ServerHostSecurityGroup.GroupId
-      Tags:
-        - Key: Name
-          Value: !Sub ${AppName}-Server
-        - Key: Owner
-          Value: !Ref Owner
-        - Key: Project
-          Value: !Ref Project
       UserData:
         Fn::Base64:
           !Sub |
@@ -192,7 +186,15 @@ Resources:
             sudo aws s3 cp s3://${SourceBucket}/server.jar server.jar
             sudo java -Xmx1024M -Xms1024M -jar server.jar nogui
             sudo aws s3 cp s3://${SourceBucket}/eula.txt eula.txt
+            sudo aws s3 cp s3://${SourceBucket}/server.properties server.properties
             sudo java -Xmx1024M -Xms1024M -jar server.jar nogui
+      Tags:
+        - Key: Name
+          Value: !Sub ${AppName}-Server
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
 
   # Lambda
   DependencyLayer:
@@ -219,7 +221,7 @@ Resources:
           INSTANCE_ID: !Ref ServerHostInstance
           DOMAIN: !Ref DomainName
           REGION: !Ref AWS::Region
-          PERIOD: 4
+          PERIOD: !FindInMap [Global, Lambda, ServerPeriod]
           STARTUP_FUNCTION: !Ref StartupLambda
           SNS_TOPIC: !Ref SNSAlertTopic
           POWERTOOLS_SERVICE_NAME: !Ref AppName
