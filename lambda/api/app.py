@@ -12,7 +12,7 @@ domain = os.environ.get('DOMAIN')
 
 api = APIGatewayHttpResolver()
 
-region = "us-east-1"
+region = os.environ.get('REGION')
 ec2_client = EC2Client(region)
 lambda_client = LambdaClient(region)
 sns_client = SNSClient(region)
@@ -22,7 +22,7 @@ def start():
     logger.info("START endpoint triggered")
 
     ec2_client.start_server()
-    lambda_client.invoke_dns_function()
+    lambda_client.invoke_startup_function()
 
     return START_MESSAGE
 

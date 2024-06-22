@@ -10,6 +10,8 @@ fi
 
 read -r S3_BUCKET < s3_bucket.txt
 
+aws s3 sync scripts s3://minecraft-world-curran/scripts --delete
+
 sam build -t cloudformation.yaml
 sam deploy -t cloudformation.yaml \
     --stack-name Minecraft-Server \
