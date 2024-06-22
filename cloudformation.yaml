@@ -34,6 +34,10 @@ Parameters:
     Default: curranserver.click
     AllowedPattern: ^[\w+\.]+\w+$
 
+  CertificateArn:
+    Type: String
+    Default: arn:aws:acm:us-east-1:298451523862:certificate/0dba9e39-fee9-483e-8794-cf240efff79e
+
   ContactEmail:
     Type: String
     Default: jackcurran49@gmail.com
@@ -70,25 +74,6 @@ Resources:
         - Key: Project
           Value: !Ref Project
 
-  SchedulerExecutionRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: scheduler.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaRole
-      RoleName: !Sub EventBridge-${AppName}
-      Tags:
-        - Key: Owner
-          Value: !Ref Owner
-        - Key: Project
-          Value: !Ref Project
-
   ServerHostIAMRole:
     Type: AWS::IAM::Role
     Properties:
@@ -110,6 +95,25 @@ Resources:
         - Key: Project
           Value: !Ref Project
 
+  SchedulerExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaRole
+      RoleName: !Sub EventBridge-${AppName}
+      Tags:
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+
   ServerHostInstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
@@ -117,6 +121,7 @@ Resources:
       Roles:
         - !Ref ServerHostIAMRole
 
+  # EC2
   ServerHostSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -315,26 +320,23 @@ Resources:
         - - integrations
           - !Ref MinecraftAPIIntegration
 
-  # APIDomainName:
-  #   Type: AWS::ApiGatewayV2::DomainName
-  #   DependsOn: 
-  #     - APIHTTPSCertificate
-  #     - APILambdaTrigger
-  #   Properties:
-  #     DomainName: !Ref DomainName
-  #     DomainNameConfigurations:
-  #       - CertificateArn: !Ref APIHTTPSCertificate
-  #         CertificateName: APICertificate
+  MinecraftAPIDomainName:
+    Type: AWS::ApiGatewayV2::DomainName
+    Properties:
+      DomainName: !Sub api.${DomainName}
+      DomainNameConfigurations:
+        - CertificateArn: !Ref CertificateArn
+          CertificateName: !Sub ${AppName}-APICertificate
+      Tags:
+        Owner: !Ref Owner
+        Project: !Ref Project
 
-  # APIDomainNameMapping:
-  #   Type: AWS::ApiGatewayV2::ApiMapping
-  #   DependsOn: 
-  #     - APIDomainName
-  #     - APILambdaTriggerStage
-  #   Properties:
-  #     ApiId: !Ref APILambdaTrigger
-  #     DomainName: !Ref APIDomainName
-  #     Stage: !Ref APILambdaTriggerStage
+  MinecraftAPIDomainNameMapping:
+    Type: AWS::ApiGatewayV2::ApiMapping
+    Properties:
+      ApiId: !Ref MinecraftAPI
+      DomainName: !Ref MinecraftAPIDomainName
+      Stage: !Ref MinecraftAPIStage
 
   # SNS
   SNSAlertTopic:
@@ -342,6 +344,11 @@ Resources:
     Properties:
       DisplayName: !Sub ${AppName}-SNS
       TopicName: !Sub ${AppName}-SNS
+      Tags:
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
 
   SNSAlertTopicSubscription:
     Type: AWS::SNS::Subscription
@@ -350,41 +357,16 @@ Resources:
       Protocol: email
       TopicArn: !Ref SNSAlertTopic
 
-  # # Route 53
-  # ServerRouteRecord:
-  #   Type: AWS::Route53::RecordSet
-  #   DependsOn: ServerHostInstance
-  #   Properties:
-  #     HostedZoneId: !If
-  #       - HasCustomDomain
-  #       - !Ref ServerHostedZone
-  #       - !FindInMap [Route53, HostedZone, DefaultZone]
-  #     Name: !Join
-  #       - "."
-  #       - - !Ref CustomSubdomain
-  #         - !Ref DomainName
-  #     ResourceRecords:
-  #       - !GetAtt ServerHostInstance.PublicIp
-  #     Type: A
-  #     TTL: 300
-
-  # APIRouteRecord:
-  #   Type: AWS::Route53::RecordSet
-  #   DependsOn: APIDomainName
-  #   Properties:
-  #     AliasTarget:
-  #       DNSName: !GetAtt APIDomainName.RegionalDomainName
-  #       HostedZoneId: !GetAtt APIDomainName.RegionalHostedZoneId
-  #     HostedZoneId: !If
-  #       - HasCustomDomain
-  #       - !Ref ServerHostedZone
-  #       - !FindInMap [Route53, HostedZone, DefaultZone]
-  #     Name: !Join
-  #       - "."
-  #       - - api
-  #         - !Ref CustomSubdomain
-  #         - !Ref DomainName
-  #     Type: A
+  # Route 53
+  APIRouteRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      AliasTarget:
+        DNSName: !GetAtt MinecraftAPIDomainName.RegionalDomainName
+        HostedZoneId: !GetAtt MinecraftAPIDomainName.RegionalHostedZoneId
+      HostedZoneId: !Ref HostedZone
+      Name: !Sub api.${DomainName}
+      Type: A
 
   # EventBridge
   ServerStatusScheduler:
