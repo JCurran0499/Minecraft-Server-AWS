@@ -2,18 +2,15 @@ Transform: AWS::Serverless-2016-10-31
 Description: AWS Resources for the Minecraft server
 
 Mappings:
-  # EC2:
-  #   Instance:
-  #     Name: Minecraft Server (cloudformation)
-  #     Type: t2.medium
-  #   SecurityGroup:
-  #     Name: Minecraft Server SG (cloudformation)
-  #   KeyPair:
-  #     Name: Minecraft-Keys-cloudformation
+  Global:
+    EC2:
+      AvailabilityZone: us-east-1a
+      InstanceType: t2.medium
 
-  Route53:
-    HostedZone:
-      DefaultZone: Z0922428ZJ5CNMUTNWOR
+    Lambda:
+      Runtime: python3.12
+      Architecture: arm64
+      LogLevel: INFO
 
 
 Parameters:
@@ -28,6 +25,10 @@ Parameters:
   AppName:
     Type: String
     Default: Minecraft
+
+  HostedZone:
+    Type: String
+    Default: Z0922428ZJ5CNMUTNWOR
   
   DomainName:
     Type: String
@@ -35,27 +36,9 @@ Parameters:
     AllowedPattern: ^(NA)$|^(\w+\.\w+)$
     Description: The domain name imported by the user
 
-  # CustomSubdomain:
-  #   Type: String
-  #   Default: cloud
-  #   AllowedPattern: ^()$|^((\w+\.)*\w+)$
-  #   Description: A subdomain to be added to the TLD
-
-  # AvailabilityZone:
-  #   Type: String
-  #   Default: us-east-1a
-  #   AllowedPattern: ^[a-z]+-[a-z]+-[a-z0-9]+$
-  #   Description: The availability zone for hosting the server
-
-  # ServerInstanceType:
-  #   Type: String
-  #   Default: t2.medium
-  #   AllowedPattern: ^\w+\.\w+$
-  #   Description: The EC2 instance type for hosting the server
-
-
-# Conditions:
-#   HasCustomDomain: !Not [!Equals [!Ref DomainName, curranserver.click]]
+  ContactEmail:
+    Type: String
+    Default: jackcurran49@gmail.com
 
 
 Resources:
@@ -83,132 +66,125 @@ Resources:
         - Key: Project
           Value: !Ref Project
 
-  # ServerHostIAMRole:
-  #   Type: AWS::IAM::Role
-  #   Properties:
-  #     AssumeRolePolicyDocument:
-  #       Version: "2012-10-17"
-  #       Statement:
-  #         - Effect: Allow
-  #           Principal:
-  #             Service: ec2.amazonaws.com
-  #           Action: sts:AssumeRole
-  #     ManagedPolicyArns:
-  #       - arn:aws:iam::aws:policy/IAMReadOnlyAccess
-  #       - arn:aws:iam::aws:policy/AmazonS3FullAccess
-  #     RoleName: EC2Role-minecraft-cloudformation
-  #     Tags:
-  #       - Key: created_by
-  #         Value: jack_curran
+  SchedulerExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaRole
+      RoleName: !Sub EventBridge-${AppName}
+      Tags:
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
 
-  # ServerHostInstanceProfile:
-  #   Type: AWS::IAM::InstanceProfile
-  #   DependsOn: ServerHostIAMRole
-  #   Properties:
-  #     InstanceProfileName: EC2Role-minecraft-cloudformation
-  #     Roles:
-  #       - !Ref ServerHostIAMRole
+  ServerHostIAMRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/IAMReadOnlyAccess
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+      RoleName: !Sub EC2Role-${AppName}
+      Tags:
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
 
-  # EC2
-  # ServerHostEBSVolume:
-  #   Type: AWS::EC2::Volume
-  #   Properties:
-  #     AvailabilityZone: !Ref AvailabilityZone
-  #     Iops: 3000
-  #     Size: 16
-  #     Tags:
-  #       - Key: created_by
-  #         Value: jack_curran
-  #     Throughput: 125
-  #     VolumeType: gp3
+  ServerHostInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub EC2Role-${AppName}
+      Roles:
+        - !Ref ServerHostIAMRole
 
-  # ServerHostSecurityGroup:
-  #   Type: AWS::EC2::SecurityGroup
-  #   Properties:
-  #     GroupDescription: This security group allows access to the server only through the Minecraft portal.
-  #     GroupName: !FindInMap [EC2, SecurityGroup, Name]
-  #     SecurityGroupEgress:
-  #       - CidrIp: 0.0.0.0/0
-  #         Description: Allows access everywhere with no limitations
-  #         FromPort: -1
-  #         ToPort: -1
-  #         IpProtocol: all
-  #     SecurityGroupIngress:
-  #       - CidrIp: 0.0.0.0/0
-  #         Description: Allows SSH access
-  #         FromPort: 22
-  #         ToPort: 22
-  #         IpProtocol: tcp
-  #       - CidrIp: 0.0.0.0/0
-  #         Description: Allows access from the Minecraft launcher
-  #         FromPort: 25565
-  #         ToPort: 25565
-  #         IpProtocol: tcp
-  #     Tags:
-  #       - Key: Name
-  #         Value: !FindInMap [EC2, SecurityGroup, Name]
-  #       - Key: created_by
-  #         Value: jack_curran
-  #     VpcId: vpc-04235c526004ddbb5
+  ServerHostSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allows access to the server only through the Minecraft portal.
+      GroupName: !Sub ${AppName} SG
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          Description: Allows access everywhere with no limitations
+          FromPort: -1
+          ToPort: -1
+          IpProtocol: all
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          Description: Allows SSH access
+          FromPort: 22
+          ToPort: 22
+          IpProtocol: tcp
+        - CidrIp: 0.0.0.0/0
+          Description: Allows access from the Minecraft launcher
+          FromPort: 25565
+          ToPort: 25565
+          IpProtocol: tcp
+      Tags:
+        - Key: Name
+          Value: !Sub ${AppName} SG
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+      VpcId: vpc-04235c526004ddbb5
 
-  # ServerHostKeyPair:
-  #   Type: AWS::EC2::KeyPair
-  #   Properties:
-  #     KeyName: !FindInMap [EC2, KeyPair, Name]
-  #     Tags:
-  #       - Key: Name
-  #         Value: !FindInMap [EC2, KeyPair, Name]
-  #       - Key: created_by
-  #         Value: jack_curran
-
-  # ServerHostInstance:
-  #   Type: AWS::EC2::Instance
-  #   DependsOn: 
-  #     - ServerHostInstanceProfile
-  #     - ServerHostEBSVolume
-  #     - ServerHostSecurityGroup
-  #     - ServerHostKeyPair
-  #   Properties:
-  #     AvailabilityZone: !Ref AvailabilityZone
-  #     IamInstanceProfile: !Ref ServerHostInstanceProfile
-  #     ImageId: ami-0889a44b331db0194
-  #     InstanceType: !Ref ServerInstanceType
-  #     KeyName: !FindInMap [EC2, KeyPair, Name]
-  #     PropagateTagsToVolumeOnCreation: true
-  #     SecurityGroupIds:
-  #       - !GetAtt ServerHostSecurityGroup.GroupId
-  #     Tags:
-  #       - Key: Name
-  #         Value: !FindInMap [EC2, Instance, Name]
-  #       - Key: created_by
-  #         Value: jack_curran
-  #     UserData: !Base64 |
-  #       #!/bin/bash
+  ServerHostInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      AvailabilityZone: !FindInMap [Global, EC2, AvailabilityZone]
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            Iops: 4000
+            VolumeSize: 16
+            VolumeType: gp3
+      IamInstanceProfile: !Ref ServerHostInstanceProfile
+      ImageId: ami-08a0d1e16fc3f61ea
+      InstanceType: !FindInMap [Global, EC2, InstanceType]
+      SecurityGroupIds:
+        - !GetAtt ServerHostSecurityGroup.GroupId
+      Tags:
+        - Key: Name
+          Value: !Sub ${AppName}-Server
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+      UserData: !Base64 |
+        #!/bin/bash
         
-  #       set +e
+        set +e
 
-  #       sudo yum update -y
-  #       sudo yum install -y java-17-amazon-corretto-devel.x86_64
-  #       sudo mkdir /opt/minecraft
-  #       sudo mkdir /opt/minecraft/server
-  #       cd /opt/minecraft/server
-  #       sudo aws s3 cp s3://minecraft-resources-curran/server.jar server.jar
-  #       sudo java -Xmx1024M -Xms1024M -jar server.jar nogui
-  #       sudo aws s3 cp s3://minecraft-resources-curran/eula.txt eula.txt
+        cd ~
+        sudo aws s3 sync s3://minecraft-world-curran/scripts .
 
-  #       cd ~
-  #       sudo aws s3 cp s3://minecraft-resources-curran/rc.local /etc/rc.local
-  #       sudo aws s3 cp s3://minecraft-resources-curran/rc.local /etc/rc.d/rc.local
-  #       sudo chmod u+x /etc/rc.local
-  #       sudo chmod u+x /etc/rc.d/rc.local
-  #       sudo aws s3 cp s3://minecraft-resources-curran/rc-local.service /etc/systemd/system/rc-local.service
+        sudo yum update -y
+        sudo yum install java-21-amazon-corretto-headless -y
+        sudo mkdir /opt/minecraft
+        sudo mkdir /opt/minecraft/server
+        cd /opt/minecraft/server
+        sudo aws s3 cp s3://minecraft-world-curran/server.jar server.jar
+        sudo java -Xmx1024M -Xms1024M -jar server.jar nogui
+        sudo aws s3 cp s3://minecraft-world-curran/eula.txt eula.txt
         
-  #       sudo systemctl start rc-local
-  #       sudo systemctl enable rc-local
-
-  #     Volumes:
-  #       - Device: /dev/sdh
-  #         VolumeId: !GetAtt ServerHostEBSVolume.VolumeId
+        sudo touch /var/log/server.log
+        sudo touch /var/log/server-err.log
+        sudo java -Xmx1024M -Xms1024M -jar server.jar nogui > /var/log/server.log 2> /var/log/server-err.log
 
   # Lambda
   DependencyLayer:
@@ -218,7 +194,7 @@ Resources:
         - arm64
         - x86_64
       CompatibleRuntimes:
-        - python3.12
+        - !FindInMap [Global, Lambda, Runtime]
       ContentUri: ./layer
       LayerName: !Sub ${AppName}-dependencies
       RetentionPolicy: Delete
@@ -227,18 +203,18 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Architectures:
-        - arm64
+        - !FindInMap [Global, Lambda, Architecture]
       CodeUri: ./main
       Description: Manages the Minecraft server
       Environment:
         Variables:
-          INSTANCE_ID: i-0f46f418e6cd5bd50
+          INSTANCE_ID: !Ref ServerHostInstance
           DOMAIN: !Ref DomainName
           PERIOD: 4
           DNS_FUNCTION: !Ref DNSLambda
-          SNS_TOPIC: arn:aws:sns:us-east-1:298451523862:Minecraft-Server-SNS
+          SNS_TOPIC: !Ref SNSAlertTopic
           POWERTOOLS_SERVICE_NAME: !Ref AppName
-          POWERTOOLS_LOG_LEVEL: INFO
+          POWERTOOLS_LOG_LEVEL: !FindInMap [Global, Lambda, LogLevel]
       FunctionName: !Ref AppName
       Handler: app.handler
       Events:
@@ -252,7 +228,7 @@ Resources:
       Layers:
         - !Ref DependencyLayer
       MemorySize: 128
-      Runtime: python3.12
+      Runtime: !FindInMap [Global, Lambda, Runtime]
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 30
       Tags:
@@ -263,22 +239,22 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Architectures:
-        - arm64
+        - !FindInMap [Global, Lambda, Architecture]
       CodeUri: ./dns
       Description: Updates the Route53 record when server starts
       Environment:
         Variables:
-          INSTANCE_ID: i-0f46f418e6cd5bd50
+          INSTANCE_ID: !Ref ServerHostInstance
           DOMAIN: !Ref DomainName
-          HOSTED_ZONE_ID: !FindInMap [Route53, HostedZone, DefaultZone]
+          HOSTED_ZONE_ID: !Ref HostedZone
           POWERTOOLS_SERVICE_NAME: !Sub ${AppName}-DNS-Manager
-          POWERTOOLS_LOG_LEVEL: INFO
+          POWERTOOLS_LOG_LEVEL: !FindInMap [Global, Lambda, LogLevel]
       FunctionName: !Sub ${AppName}-DNS-Manager
       Handler: app.handler
       Layers:
         - !Ref DependencyLayer
       MemorySize: 128
-      Runtime: python3.12
+      Runtime: !FindInMap [Global, Lambda, Runtime]
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 300
       Tags:
@@ -340,11 +316,7 @@ Resources:
   #     - APIHTTPSCertificate
   #     - APILambdaTrigger
   #   Properties:
-  #     DomainName: !Join
-  #       - "."
-  #       - - api
-  #         - !Ref CustomSubdomain
-  #         - !Ref DomainName
+  #     DomainName: !Ref DomainName
   #     DomainNameConfigurations:
   #       - CertificateArn: !Ref APIHTTPSCertificate
   #         CertificateName: APICertificate
@@ -359,17 +331,21 @@ Resources:
   #     DomainName: !Ref APIDomainName
   #     Stage: !Ref APILambdaTriggerStage
 
+  # SNS
+  SNSAlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: !Sub ${AppName}-SNS
+      TopicName: !Sub ${AppName}-SNS
 
-  # Route 53
-  # ServerHostedZone:
-  #   Type: AWS::Route53::HostedZone
-  #   Condition: HasCustomDomain
-  #   Properties:
-  #     Name: !Ref DomainName
-  #     HostedZoneTags:
-  #       - Key: created_by
-  #         Value: jack_curran
+  SNSAlertTopicSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Endpoint: !Ref ContactEmail
+      Protocol: email
+      TopicArn: !Ref SNSAlertTopic
 
+  # # Route 53
   # ServerRouteRecord:
   #   Type: AWS::Route53::RecordSet
   #   DependsOn: ServerHostInstance
@@ -405,27 +381,45 @@ Resources:
   #         - !Ref DomainName
   #     Type: A
 
-
-  # # ACM
-  # APIHTTPSCertificate:
-    # Type: AWS::CertificateManager::Certificate
-    # Properties:
-    #   DomainName: !Join
-    #     - "."
-    #     - - api
-    #       - !Ref CustomSubdomain
-    #       - !Ref DomainName
-    #   DomainValidationOptions:
-    #     - DomainName: !Join
-    #         - "."
-    #         - - api
-    #           - !Ref CustomSubdomain
-    #           - !Ref DomainName
-    #       HostedZoneId: !If
-    #         - HasCustomDomain
-    #         - !Ref ServerHostedZone
-    #         - !FindInMap [Route53, HostedZone, DefaultZone]
-    #   Tags:
-    #     - Key: created_by
-    #       Value: jack_curran
-    #   ValidationMethod: DNS
+  # EventBridge
+  ServerStatusScheduler:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Description: Shuts down the server if it has been running for too long
+      FlexibleTimeWindow:
+        MaximumWindowInMinutes: 5
+        Mode: "FLEXIBLE"
+      Name: !Sub ${AppName}-server-monitor
+      ScheduleExpression: rate(15 minutes)
+      State: ENABLED
+      Target:
+        Arn: !GetAtt MinecraftLambda.Arn
+        Input: | 
+          {
+            "version": "2.0",
+            "routeKey": "ANY /{path+}",
+            "rawPath": "/status",
+            "rawQueryString": "expire=true",
+            "headers": {
+              "accept": "*/*",
+              "accept-encoding": "gzip, deflate, br",
+              "content-length": "0"
+            },
+            "queryStringParameters": {
+              "expire": "true"
+            },
+            "requestContext": {
+              "http": {
+                "method": "GET",
+                "path": "/status",
+                "protocol": "HTTP/1.1"
+              },
+              "routeKey": "ANY /{path+}",
+              "stage": "$default"
+            },
+            "pathParameters": {
+              "path": "status"
+            },
+            "isBase64Encoded": false
+          }
+        RoleArn: !GetAtt SchedulerExecutionRole.Arn
