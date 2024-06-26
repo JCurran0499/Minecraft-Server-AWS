@@ -88,6 +88,7 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/IAMReadOnlyAccess
         - arn:aws:iam::aws:policy/AmazonS3FullAccess
+        - arn:aws:iam::aws:policy/CloudWatchLogsFullAccess
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
       RoleName: !Sub EC2Role-${AppName}
       Tags:
@@ -180,9 +181,17 @@ Resources:
             sudo yum install -y java-21-amazon-corretto-headless
             sudo yum install -y https://s3.${AWS::Region}.amazonaws.com/amazon-ssm-${AWS::Region}/latest/linux_amd64/amazon-ssm-agent.rpm
 
+            wget https://amazoncloudwatch-agent-${AWS::Region}.s3.${AWS::Region}.amazonaws.com/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
+            sudo rpm -U amazon-cloudwatch-agent.rpm
+            sudo aws s3 cp s3://minecraft-world-curran/logs/config.json /opt/aws/amazon-cloudwatch-agent/bin/config.json
+            sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/bin/config.json -s
+
             sudo mkdir /opt/minecraft
-            sudo mkdir /opt/minecraft/server
-            cd /opt/minecraft/server
+            cd /opt/minecraft
+            sudo aws s3 sync s3://${SourceBucket}/scripts .
+            
+            sudo mkdir server
+            cd server
             sudo aws s3 cp s3://${SourceBucket}/server.jar server.jar
             sudo java -Xmx1024M -Xms1024M -jar server.jar nogui
             sudo aws s3 cp s3://${SourceBucket}/eula.txt eula.txt
