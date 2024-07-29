@@ -162,8 +162,8 @@ Resources:
       BlockDeviceMappings:
         - DeviceName: /dev/xvda
           Ebs:
-            Iops: 4000
-            VolumeSize: 16
+            Iops: 3000
+            VolumeSize: 8
             VolumeType: gp3
       IamInstanceProfile: !Ref ServerHostInstanceProfile
       ImageId: ami-08a0d1e16fc3f61ea
